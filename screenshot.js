@@ -7,7 +7,8 @@ const fs = require('fs');
 const path = require('path');
 
 const CHROMIUM_PATH = '/data/data/com.termux/files/usr/bin/chromium-browser';
-const OUTPUT_DIR = path.join(__dirname, 'screenshots');
+const OUTPUT_DIR = path.join(__dirname, 'docs', 'screenshots');
+const INDEX_FILE = path.join(OUTPUT_DIR, 'index.json');
 const DEBUG_PORT = 9222;
 
 // Ensure output directory exists
@@ -28,6 +29,28 @@ function httpGet(url) {
       res.on('end', () => resolve(JSON.parse(data)));
     }).on('error', reject);
   });
+}
+
+function updateIndex(filename, url, size) {
+  let data = { screenshots: [] };
+
+  try {
+    if (fs.existsSync(INDEX_FILE)) {
+      data = JSON.parse(fs.readFileSync(INDEX_FILE, 'utf8'));
+    }
+  } catch (err) {
+    console.error('Warning: Could not read index file, creating new one');
+  }
+
+  data.screenshots.push({
+    filename,
+    url,
+    size,
+    timestamp: new Date().toISOString()
+  });
+
+  fs.writeFileSync(INDEX_FILE, JSON.stringify(data, null, 2));
+  console.log('Updated index.json');
 }
 
 function sendCDP(ws, id, method, params = {}) {
@@ -143,8 +166,12 @@ async function takeScreenshot(url) {
     });
 
     // Save screenshot
-    fs.writeFileSync(outputPath, Buffer.from(screenshot.data, 'base64'));
+    const imageBuffer = Buffer.from(screenshot.data, 'base64');
+    fs.writeFileSync(outputPath, imageBuffer);
     console.log(`Screenshot saved: ${outputPath}`);
+
+    // Update index.json for GitHub Pages gallery
+    updateIndex(filename, url, imageBuffer.length);
 
     ws.close();
 
